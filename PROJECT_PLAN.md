@@ -56,16 +56,16 @@
 
 ### フェーズ1: コア機能開発 (Pythonスクリプト)
 
--   [ ] Gemini APIを使用してAIニュースのURLを収集するPythonスクリプトの作成
--   [ ] 収集したURLを整形し、メール本文を作成する機能の実装
--   [ ] Pythonの `smtplib` を使用してメールを送信する機能の実装 (GmailなどのSMTPサーバーを利用)
--   [ ] ローカル環境でのスクリプトの動作確認
+-   [x] Gemini APIを使用してAIニュースのURLを収集するPythonスクリプトの作成
+-   [x] 収集したURLを整形し、メール本文を作成する機能の実装
+-   [x] Pythonの `smtplib` を使用してメールを送信する機能の実装 (GmailなどのSMTPサーバーを利用)
+-   [x] ローカル環境でのスクリプトの動作確認
 
 ### フェーズ2: GCPへのデプロイと自動化
 
--   [ ] Cloud FunctionsへのPythonスクリプトのデプロイ
--   [ ] Cloud FunctionsがGemini APIとメール送信サービスにアクセスするためのIAM設定
--   [ ] Cloud Schedulerの設定 (毎日午前7:00にCloud Functionsをトリガー)
+-   [x] Cloud FunctionsへのPythonスクリプトのデプロイ
+-   [x] Cloud FunctionsがGemini APIとメール送信サービスにアクセスするためのIAM設定
+-   [x] Cloud Schedulerの設定 (毎日午前7:00にCloud Functionsをトリガー)
 -   [ ] デプロイ後の動作確認とエラーハンドリング
 
 ## 6. ディレクトリ構成（案）
@@ -77,5 +77,6 @@ ai-news-audio-project/
 │   ├── requirements.txt  # 依存ライブラリ
 │   └── config.py         # メールアドレスなどの設定 (環境変数で管理推奨)
 ├── PROJECT_PLAN.md       # このファイル
-└── README.md
+├── README.md
+└── gcloud_key/           # GCPサービスアカウントキーの保存場所 (key.json)
 ```
