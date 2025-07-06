@@ -1,3 +1,7 @@
+import warnings
+import urllib3.exceptions
+warnings.filterwarnings("ignore", category=urllib3.exceptions.NotOpenSSLWarning)
+
 import os
 import google.generativeai as genai
 import requests
@@ -6,10 +10,6 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import datetime
-
-import warnings
-import urllib3.exceptions
-warnings.filterwarnings("ignore", category=urllib3.exceptions.NotOpenSSLWarning)
 
 # Gemini APIの設定
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
@@ -20,8 +20,9 @@ def get_ai_news_urls(query: str) -> list[str]:
     Gemini APIを使用して、指定されたクエリに関するAIニュースのURLを収集します。
     """
     today = datetime.date.today()
+    yesterday = today - datetime.timedelta(days=1)
     prompt = f"""
-    今日({today.strftime("%Y-%m-%d")})に公開された、
+    過去48時間以内に公開された、
     最新の人工知能に関するニュース記事のURLを5つ教えてください。
     
     以下の条件を厳守してください。
@@ -30,7 +31,7 @@ def get_ai_news_urls(query: str) -> list[str]:
     - リンク切れでないことを確認してください。
     - 信頼できるニュースソース（例: TechCrunch, The Verge, WIRED, Nature, Science, Google AI Blogなど）を優先してください。
     - ニュース記事の要約ページやトップページへのリンクではなく、記事本体への直接リンクにしてください。
-    - 記事の公開日が今日({today.strftime("%Y-%m-%d")})であることを確認してください。
+    - 記事の公開日が過去48時間以内であることを確認してください。
     
     例：
     https://example.com/news/ai-breakthrough-article-full-text-2025-07-06
