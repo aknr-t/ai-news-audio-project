@@ -5,6 +5,11 @@ from bs4 import BeautifulSoup
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import datetime
+
+import warnings
+import urllib3.exceptions
+warnings.filterwarnings("ignore", category=urllib3.exceptions.NotOpenSSLWarning)
 
 # Gemini APIの設定
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
@@ -14,16 +19,27 @@ def get_ai_news_urls(query: str) -> list[str]:
     """
     Gemini APIを使用して、指定されたクエリに関するAIニュースのURLを収集します。
     """
+    today = datetime.date.today()
     prompt = f"""
+    今日({today.strftime("%Y-%m-%d")})に公開された、
     最新の人工知能に関するニュース記事のURLを5つ教えてください。
-    各URLは新しい行に記述し、それ以外の情報は含めないでください。
+    
+    以下の条件を厳守してください。
+    - 各URLは新しい行に記述し、それ以外の情報は含めないでください。
+    - URLは必ず有効なもので、直接ニュース記事のページにリンクしていること。
+    - リンク切れでないことを確認してください。
+    - 信頼できるニュースソース（例: TechCrunch, The Verge, WIRED, Nature, Science, Google AI Blogなど）を優先してください。
+    - ニュース記事の要約ページやトップページへのリンクではなく、記事本体への直接リンクにしてください。
+    - 記事の公開日が今日({today.strftime("%Y-%m-%d")})であることを確認してください。
+    
     例：
-    https://example.com/news/ai-breakthrough
-    https://another.example.org/article/latest-ai-research
+    https://example.com/news/ai-breakthrough-article-full-text-2025-07-06
+    https://another.example.org/article/latest-ai-research-detail-2025-07-06
 
     クエリ: {query}
     """
     response = gemini_model.generate_content(prompt)
+    print(f"Gemini raw response: {response.text}")
     urls = [url.strip() for url in response.text.split('\n') if url.strip().startswith("http")]
     return urls
 
@@ -32,11 +48,16 @@ def main(request):
     Cloud Functionsのエントリポイント。
     AIニュースのURLを収集し、メールで送信します。
     """
-    query = "最新の人工知能"
+    print("--- AIニュース収集処理を開始します ---")
+    query = "最新の人工知能 OpenAI NTTデータ ServiceNow Salesforce Gemini Claude"
+    print(f"[Step 1/3] Gemini APIからニュースURLを収集します。クエリ: {query}")
     news_urls = get_ai_news_urls(query)
 
+    print(f"[Step 2/3] 収集したURL: {news_urls}")
+    print("[Step 3/3] メールを送信します。")
     send_email(news_urls)
 
+    print("--- AIニュース収集処理が完了しました ---")
     return "News collection and email process initiated."
 
 def send_email(news_urls: list[str]):
@@ -53,7 +74,8 @@ def send_email(news_urls: list[str]):
     message = MIMEMultipart()
     message["From"] = sender_email
     message["To"] = receiver_email
-    message["Subject"] = "最新のAIニュース"
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    message["Subject"] = f"最新のAIニュース ({today_str})"
 
     body = "最新のAIニュースのURLです：\n\n" + "\n".join(news_urls)
     message.attach(MIMEText(body, "plain"))
