@@ -109,7 +109,7 @@ def send_email(news_items: list[dict]):
     body_content = "最新のAIニュースです：\n\n"
     if news_items:
         for item in news_items:
-            body_content += f"タイトル: {item['title']}\nURL: {item['url']}\n公開日: {item['published'].strftime("%Y-%m-%d %H:%M")}\n\n"
+            body_content += f"タイトル: {item['title']}\nURL: {item['url']}\n公開日: {item['published'].strftime('%Y-%m-%d %H:%M')}\n\n"
     else:
         body_content += "該当するニュースは見つかりませんでした。\n\n"
 
