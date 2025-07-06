@@ -6,7 +6,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import datetime
-import re # 正規表現モジュールを追加
+import feedparser # feedparserモジュールを追加
 
 import warnings
 import urllib3.exceptions
@@ -16,36 +16,62 @@ warnings.filterwarnings("ignore", category=urllib3.exceptions.NotOpenSSLWarning)
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 gemini_model = genai.GenerativeModel('gemini-2.5-pro') # または gemini-1.5-pro-latest
 
-def get_ai_news_urls(query: str) -> list[str]:
+def is_relevant_by_gemini(title: str, summary: str) -> bool:
     """
-    Gemini APIを使用して、指定されたクエリに関するAIニュースのURLを収集します。
+    Gemini APIを使用して、ニュース記事がAI関連のトピックに合致するかを判断します。
     """
     prompt = f"""
-    過去48時間以内に公開された、
-    最新の人工知能に関するニュース記事の要約と、その出典URLをセットで5つ教えてください。
-    
-    以下の条件を厳守してください。
-    - 各ニュースはMarkdown形式のリストで記述し、要約とURLを明確に区別してください。
-    - URLは必ず有効なもので、直接ニュース記事のページにリンクしていること。
-    - リンク切れでないことを確認してください。
-    - 信頼できるニュースソース（例: TechCrunch, The Verge, WIRED, Nature, Science, Google AI Blogなど）を優先してください。
-    - ニュース記事の要約ページやトップページへのリンクではなく、記事本体への直接リンクにしてください。
-    - 記事の公開日が過去48時間以内であることを確認してください。
-    
-    例：
-    - **要約1:** AIの最新研究に関するブレイクスルーが発表されました。
-      URL: https://example.com/news/ai-breakthrough-article-full-text-2025-07-06
-    - **要約2:** 新しいAIモデルが医療分野で活用される見込みです。
-      URL: https://another.example.org/article/latest-ai-research-detail-2025-07-06
+    以下のニュース記事が、人工知能（AI）または以下の企業（OpenAI, NTTデータ, ServiceNow, Salesforce, Gemini, Claude）に関連する内容であれば「True」を、そうでなければ「False」を返してください。
 
-    クエリ: {query}
+    記事タイトル: {title}
+    記事要約: {summary}
+
+    判断結果: """
+    try:
+        response = gemini_model.generate_content(prompt)
+        return response.text.strip().lower() == "true"
+    except Exception as e:
+        print(f"Error calling Gemini for relevance check: {e}")
+        return False # エラー時は関連なしと判断
+
+def get_filtered_news_from_rss() -> list[dict]:
     """
-    response = gemini_model.generate_content(prompt)
-    print(f"Gemini raw response: {response.text}")
-    # Extract URLs using regex
-    urls = re.findall(r'https?://[^\s]+', response.text)
-    urls = [url.strip() for url in urls]
-    return urls
+    RSSフィードからAIニュースのタイトル、URL、公開日を収集し、Geminiでフィルタリングします。
+    """
+    rss_feeds = [
+        "https://techcrunch.com/feed/",
+        "https://www.wired.com/feed/rss",
+        "https://feeds2.feedburner.com/businessinsider",
+        "http://feeds.bbci.co.uk/news/rss.xml?edition=int",
+        "https://assets.wor.jp/rss/rdf/nikkei/technology.rdf",
+        "https://assets.wor.jp/rss/rdf/yomiuri/science.rdf"
+    ]
+
+    news_items = []
+    two_days_ago = datetime.datetime.now() - datetime.timedelta(days=2)
+
+    for feed_url in rss_feeds:
+        try:
+            feed = feedparser.parse(feed_url)
+            for entry in feed.entries:
+                published_time = None
+                if hasattr(entry, 'published_parsed'):
+                    published_time = datetime.datetime(*entry.published_parsed[:6])
+                elif hasattr(entry, 'updated_parsed'):
+                    published_time = datetime.datetime(*entry.updated_parsed[:6])
+
+                if published_time and published_time > two_days_ago:
+                    title = entry.title if hasattr(entry, 'title') else "No Title"
+                    link = entry.link if hasattr(entry, 'link') else "No Link"
+                    summary = entry.summary if hasattr(entry, 'summary') else ""
+                    
+                    # Geminiでフィルタリング
+                    if is_relevant_by_gemini(title, summary):
+                        news_items.append({"title": title, "url": link, "published": published_time})
+        except Exception as e:
+            print(f"Error processing RSS feed {feed_url}: {e}")
+
+    return news_items
 
 def main(request):
     """
@@ -53,18 +79,17 @@ def main(request):
     AIニュースのURLを収集し、メールで送信します。
     """
     print("--- AIニュース収集処理を開始します ---")
-    query = "最新の人工知能 OpenAI NTTデータ ServiceNow Salesforce Gemini Claude"
-    print(f"[Step 1/3] Gemini APIからニュースURLを収集します。クエリ: {query}")
-    news_urls = get_ai_news_urls(query)
+    print(f"[Step 1/2] RSSフィードからニュースを収集し、Geminiでフィルタリングします。")
+    news_items = get_filtered_news_from_rss()
 
-    print(f"[Step 2/3] 収集したURL: {news_urls}")
+    print(f"[Step 2/2] 収集したニュースアイテム数: {len(news_items)}")
     print("[Step 3/3] メールを送信します。")
-    send_email(news_urls)
+    send_email(news_items)
 
     print("--- AIニュース収集処理が完了しました ---")
     return "News collection and email process initiated."
 
-def send_email(news_urls: list[str]):
+def send_email(news_items: list[dict]):
     sender_email = os.environ.get("SENDER_EMAIL")
     sender_password = os.environ.get("SENDER_PASSWORD")
     receiver_email = os.environ.get("RECEIVER_EMAIL")
@@ -81,8 +106,14 @@ def send_email(news_urls: list[str]):
     today_str = datetime.date.today().strftime("%Y-%m-%d")
     message["Subject"] = f"最新のAIニュース ({today_str})"
 
-    body = "最新のAIニュースのURLです：\n\n" + "\n".join(news_urls)
-    message.attach(MIMEText(body, "plain"))
+    body_content = "最新のAIニュースです：\n\n"
+    if news_items:
+        for item in news_items:
+            body_content += f"タイトル: {item['title']}\nURL: {item['url']}\n公開日: {item['published'].strftime("%Y-%m-%d %H:%M")}\n\n"
+    else:
+        body_content += "該当するニュースは見つかりませんでした。\n\n"
+
+    message.attach(MIMEText(body_content, "plain"))
 
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
