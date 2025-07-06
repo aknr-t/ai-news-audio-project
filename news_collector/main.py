@@ -1,7 +1,3 @@
-import warnings
-import urllib3.exceptions
-warnings.filterwarnings("ignore", category=urllib3.exceptions.NotOpenSSLWarning)
-
 import os
 import google.generativeai as genai
 import requests
@@ -10,6 +6,11 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import datetime
+import re # 正規表現モジュールを追加
+
+import warnings
+import urllib3.exceptions
+warnings.filterwarnings("ignore", category=urllib3.exceptions.NotOpenSSLWarning)
 
 # Gemini APIの設定
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
@@ -19,14 +20,12 @@ def get_ai_news_urls(query: str) -> list[str]:
     """
     Gemini APIを使用して、指定されたクエリに関するAIニュースのURLを収集します。
     """
-    today = datetime.date.today()
-    yesterday = today - datetime.timedelta(days=1)
     prompt = f"""
     過去48時間以内に公開された、
-    最新の人工知能に関するニュース記事のURLを5つ教えてください。
+    最新の人工知能に関するニュース記事の要約と、その出典URLをセットで5つ教えてください。
     
     以下の条件を厳守してください。
-    - 各URLは新しい行に記述し、それ以外の情報は含めないでください。
+    - 各ニュースはMarkdown形式のリストで記述し、要約とURLを明確に区別してください。
     - URLは必ず有効なもので、直接ニュース記事のページにリンクしていること。
     - リンク切れでないことを確認してください。
     - 信頼できるニュースソース（例: TechCrunch, The Verge, WIRED, Nature, Science, Google AI Blogなど）を優先してください。
@@ -34,14 +33,18 @@ def get_ai_news_urls(query: str) -> list[str]:
     - 記事の公開日が過去48時間以内であることを確認してください。
     
     例：
-    https://example.com/news/ai-breakthrough-article-full-text-2025-07-06
-    https://another.example.org/article/latest-ai-research-detail-2025-07-06
+    - **要約1:** AIの最新研究に関するブレイクスルーが発表されました。
+      URL: https://example.com/news/ai-breakthrough-article-full-text-2025-07-06
+    - **要約2:** 新しいAIモデルが医療分野で活用される見込みです。
+      URL: https://another.example.org/article/latest-ai-research-detail-2025-07-06
 
     クエリ: {query}
     """
     response = gemini_model.generate_content(prompt)
     print(f"Gemini raw response: {response.text}")
-    urls = [url.strip() for url in response.text.split('\n') if url.strip().startswith("http")]
+    # Extract URLs using regex
+    urls = re.findall(r'https?://[^\s]+', response.text)
+    urls = [url.strip() for url in urls]
     return urls
 
 def main(request):
